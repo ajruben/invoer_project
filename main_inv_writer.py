@@ -4,7 +4,8 @@ import time
 import numpy as np
 import pandas as pd
 import os
-
+#TODO Reseach way to achievt he same with only sql if frank or philip considers it relevant
+emmissie_kolommen = ['emmissieDag64Hz', 'emmissieDag125Hz', 'emmissieDag250Hz', 'emmissieDag500Hz', 'emmissieDag1000Hz', 'emmissieDag2000Hz', 'emmissieDag4000Hz', 'emmissieDag8000Hz', 'emmissieAvond64Hz', 'emmissieAvond125Hz', 'emmissieAvond250Hz', 'emmissieAvond500Hz', 'emmissieAvond1000Hz', 'emmissieAvond2000Hz', 'emmissieAvond4000Hz', 'emmissieAvond8000Hz', 'emmissieNacht64Hz', 'emmissieNacht125Hz', 'emmissieNacht250Hz', 'emmissieNacht500Hz', 'emmissieNacht1000Hz', 'emmissieNacht2000Hz', 'emmissieNacht4000Hz', 'emmissieNacht8000Hz']
 class GeopackageToINV(Geopackage):
     """
     This class is for retrieving data from a geopackage and convert to a INV (invoer) format for the rekenhart (rh).
@@ -37,25 +38,10 @@ class GeopackageToINV(Geopackage):
     #parameters (in gpkg: field tables, in qgis: layer)
     def bebouwing(self): #cvgg: bouwwerk, rh:bebouwing
         """
-        Writing to file. The current method takes about 2 seconds for 100k rows on computer 73, seems to be O(n) time complexity.
-        It's 3 times faster than the previous geopandas version for 1k and 100k rows, unknown time complexity.
-
-        Important background on retrieve_coordinates:
-        OGR uses tree spatial indexing when creating geometry, which is useful for operations like finding intersections, etc.
-        However, we just want to get the coords as floats quickly.
-        Retrieving the coordinates in readable format, i.e., floats instead of b"\\xoo(...)", could be done
-        using OGR, but it has to loop over every feature, which is SLOW (takes ~30s for ~100k rows).
-        Let's use SQLite functionality instead; this is basically instant.
-        The table we want for the purpose of getting the float values is rtree_bouwwerk_geom.
-        Column info: [(0, 'id', 'INT', 0, None, 0), (1, 'minx', 'REAL', 0, None, 0), (2, 'maxx', 'REAL', 0, None, 0),
-                      (3, 'miny', 'REAL', 0, None, 0), (4, 'maxy', 'REAL', 0, None, 0)]
-        Also see http://www.geopackage.org/spec120/#extension_rtree section Create Virtual Table.
-        But the rows are not in 'id' order (unless you have a certain pattern of geometries, s.a. diagonal),
-        but are ordered 'spatially'. Therefore need to order it first. 
+        doc
         """
-
         #retrieve and format coord data
-        reflectie, index_mapping = self._create_spectrum(layer_name='bouwwerk', spectrum_column = 'band')
+        reflectie, index_mapping, columns, spectrum_content = self._create_spectrum(layer_name='bouwwerk', spectrum_column = 'band')
         self._retrieve_coordinates_sql(reflectie = reflectie, layer_name = 'bouwwerk')
 
         temp_file = "inv/" + "temp_invoerfile.txt"
@@ -84,7 +70,6 @@ class GeopackageToINV(Geopackage):
         with open(self.inv_file_location, 'a') as file:
             np.savetxt(file, reflect_array, header="REFLEKTIE", fmt='%d', delimiter=', ', comments='', newline='\n<0>, ') #<---do this, what not to do: follow chatgpt's instructions. it will try to erase the entire file and rewrite it from scratch using forloops, yikes
         file_path = self.inv_file_location
-
         with open(file_path, 'rb+') as file:
             file.seek(-1, 2)  # Move the cursor to the last character
 
@@ -93,39 +78,91 @@ class GeopackageToINV(Geopackage):
 
             file.truncate()  # Truncate the file at the current position
 
-    def wegvakken(self):
+    def wegvakken(self):#TODO KENMEKR: GEDOE MET STRING, HOE TOEVOEGEN?
         # Uitgangspunt bij het maken van het invoerbestand *.inv is dat de emissie niet wordt meegegeven maar wordt berekend in het RIVM rekenhart
         # Als besloten wordt wel de emissie in de dBvision module te gaan berekenen (bv voor de basisgeluidemissie (BGE)) dan moet dit deel nog worden 
-        # aangevuld in het script dat het invoerbestand maakt. 
-        EmmissieDag, index_mapping_EmmissieDag = self._create_spectrum(layer_name='wegdeelGPP', spectrum_column = 'emmissieDag')
-        EmmissieAvond, index_mapping_EmmissieAvond = self._create_spectrum(layer_name='wegdeelGPP', spectrum_column = 'emmissieAvond')
-        EmmissieNacht, index_mapping_EmmissieNacht = self._create_spectrum(layer_name='wegdeelGPP', spectrum_column = 'emmissieNacht')
+        # aangevuld in het script dat het invoerbestand maakt.
+        wegdektypes = {
+            'referentiewegdek':2,
+            '1L ZOAB':1,
+            'akoestisch geoptimaliseerd 1L ZOAB':3,
+            '2L ZOAB':6,
+            '2L ZOAB fijn':5,
+            'SMA 0/5':4,
+            'SMA 0/8':7,
+            'akoestisch geoptimaliseerd SMA':8,
+            'uitgeborsteld beton':9,
+            'geoptimaliseerd uitgeborsteld beton':10,
+            'fijngebezemd beton':11,
+            'oppervlakbewerking':12,
+            'elementenverharding keperverband':13,
+            'elementenverharding niet in keperverband':14,
+            'stille elementenverharding':15,
+            'dunne deklagen A':16,
+            'dunne deklagen B':17
+        }
 
+        Emmissienr, index_mapping_Emmissie, columns, spectrum_content = self._create_spectrum(layer_name='wegdeelGPP', spectrum_column = 'emmissie')
+      #  print(Emmissienr, index_mapping_Emmissie, columns, spectrum_content)
+        hoofd_record_columns = ['kenmerk', 'wegdektype', 'hellingcorrectie', 'groepnummer', 'plafondcorrectie']
+        hoofd_record_content = self.select_by_column_order('wegdeelGPP', order = hoofd_record_columns)
+        hoofd_record_lines = np.array(
+            [
+                [i + 1] + [0] + [wegdektypes[hoofd_record_content[i][j]] if j == 1 else hoofd_record_content[i][j] for j in range(1,3)] +
+                [float(Emmissienr[i])] + [float(hoofd_record_content[i][j]) for j in range(3, len(hoofd_record_columns))]
+                for i in range(len(Emmissienr))
+            ]
+        )
+
+        # Convert the entire array to float
+        hoofd_record_lines = hoofd_record_lines.astype(float)
+       
+        #hoofdline writer
+        with open(self.inv_file_location, 'a') as file:
+            np.savetxt(file, hoofd_record_lines, header="WEGVAKKEN", fmt = ['%d'] * 6  + ['%.2f'], delimiter=', ', comments='', newline='\n<0>, ') 
         
+        #emissieliens
+        emissie_line = np.array([np.array( [Emmissienr[i], (j%3) + 1] + [spectrum_content[i][k + 8 * j] for k in range(8)])  for i in range(len(spectrum_content)) for j in range(3) ])
+        #print(emissie_line)
+        with open(self.inv_file_location, 'a') as file:
+            np.savetxt(file, emissie_line, header="EMISSIE", fmt=['%d'] * 2 + ['%.2f'] * int(len(emissie_line)/3 - 2), delimiter=', ', comments='', newline='\n<0>, ') 
 
+        #remove trailing <0>
+        with open(self.inv_file_location, 'rb+') as file:
+            file.seek(-1, 2)  # Move the cursor to the last character
+            while file.read(1) != b'\n':  # Move the cursor backward until a newline character is found
+                file.seek(-2, 1)
 
+            file.truncate()  # Truncate the file at the current position
 
-
+        #headerline
     #----------------------------------------------------------------------------------------------------
     #help methods
     def _create_spectrum(self, layer_name, spectrum_column):
-        print(layer_name)
-        print(gpkg.column_names('bouwwerk'))
-        columns = self.column_names(layer_name)
-        #-------reflecties
-        contains_spectrum_column = [column_name for column_name in columns if spectrum_column in column_name]
-        #print(columns, contains_spectrum_column)
+        if layer_name == "wegdeelGPP": #because order is important, given period.
+            contains_spectrum_column = emmissie_kolommen
+        else:
+            columns = self.column_names(layer_name)
+            #-------reflecties
+            contains_spectrum_column = [column_name for column_name in columns if spectrum_column in column_name]
+            contains_spectrum_column
+            #print(columns, contains_spectrum_column)
         spectrum_content = self.select_by_column_order(layer_name, order=contains_spectrum_column)
+ 
         unique = list(enumerate(set(map(tuple, spectrum_content)))) # Outer things are to format data; set matters: gives back unique values
         
         # Create a dictionary to map each unique tuple to its index
         if layer_name == "bouwwerk":
             index_mapping = {tuple(values): (index  + 1000) for index, values in unique} #reflection indeces have to start from 1000, not sure for others
+            spectrum = [values[0] if len(set(values)) == 1 else index_mapping[tuple(values)] for values in spectrum_content] # if spectrum is constant over all bands, just give reflection, else give spectnr
         elif layer_name == "wegdeelGPP":
             index_mapping = {tuple(values): index + 1 for index, values in unique} #reflection indeces have to start from 1000, not sure for others
-        spectrum = [values[0] if len(set(values)) == 1 else index_mapping[tuple(values)] for values in spectrum_content] # if spectrum is constant over all bands, just give reflection, else give spectnr
-        return spectrum, index_mapping
+            spectrum = [index_mapping[tuple(values)] for values in spectrum_content]
+   
+        return spectrum, index_mapping, contains_spectrum_column, spectrum_content
         #retrieve and format coord data
+
+   
 
     def _retrieve_coordinates_sql(self, reflectie, layer_name): #TODO:
         """
