@@ -14,7 +14,7 @@ def make_reflection_bandbreedte(rows):
     band = [random.choice([int(i*10) for i in range(7,9)]) for i in range(int(rows))] 
     return band
 rows = 10
-feature_count_wegvakken = 10
+feature_count_wegvakken = 100000
 wegdektypes = ['referentiewegdek',
                '1L ZOAB',
                'akoestisch geoptimaliseerd 1L ZOAB',
@@ -183,7 +183,7 @@ table_schemas = {
         'feature_count': feature_count_wegvakken,
         'data': {
                 'kenmerk': [""] * feature_count_wegvakken, #optioneel mag vanalles zijn
-                'wegdektype': [random.choice([wegdektypes]) for i in range(1 , 1 + feature_count_wegvakken)][0],
+                'wegdektype': [random.choice(wegdektypes) for i in range(1 , 1 + feature_count_wegvakken)],
                 'hellingcorrectie': [random.choice([0,1]) for i in range(1, feature_count_wegvakken + 1)], #ja nee
               
                 'groepnummer' : [1 for i in range(1, feature_count_wegvakken + 1)],
@@ -663,18 +663,19 @@ class Geopackage(): #TODO, replace print statements. is fine for now
 
     def __Create_Features_from_data_Line(self, layer, table_schema):
         if table_schema['geometry_pattern'] == 'random':
-            WKT = self.__Create_Connected_LineStringsWKT_random(table_schema)
+            WKT = self.__Create_Sep_LineStringsWKT_random(table_schema)
         data = table_schema['data']
         self.__create_features(layer, data, WKT)
         
     #helper helper function
     def __create_features(self, layer, data, WKT):
         for i in range(len(data[next(iter(data))])):
+
             feature = ogr.Feature(layer.GetLayerDefn())
             if WKT != None:
                 feature.SetGeometry(ogr.CreateGeometryFromWkt(WKT[i]))
             for key in data:
-                #print(key, data[key][i])
+
                 feature.SetField(key, data[key][i])
             # Add the feature to the layer
             layer.CreateFeature(feature)
@@ -696,12 +697,21 @@ class Geopackage(): #TODO, replace print statements. is fine for now
     def __Create_Sep_LineStringsWKT_random(self, table_schema):
         import random
         linestrings = []
-        max_x, max_y, min_x, min_y, data, num = self.__variables(table_schema)
+        max_x, max_y, min_x, min_y, min_z, max_z, min_m, max_m, data, num = self.__variables(table_schema)
         for i in range(num):
-            start_x, start_y = random.uniform(min_x, max_x), random.uniform(min_y, max_y)
-            size_x, size_y = random.uniform(-(max_x - min_x) / num, (max_x - min_x) / num), random.uniform(-(max_x - min_x) / num, (max_y - min_y) / num)
-            end_x, end_y= start_x + size_x, start_y + size_y
-            linestring_str = f'LINESTRING({start_x} {start_y}, {end_x} {end_y})'
+            start_x = random.uniform(min_x, max_x)
+            start_y = random.uniform(min_y, max_y)
+            start_z = random.uniform(min_z, max_z)
+            start_m = random.uniform(min_m, max_m)
+            size_x = random.uniform(-(max_x - min_x) / num, (max_x - min_x) / num)
+            size_y = random.uniform(-(max_x - min_x) / num, (max_y - min_y) / num)
+            size_z = random.uniform(-0.5, 0.5)
+            size_m = size_z
+            end_x = start_x + size_x
+            end_y = start_y + size_y
+            end_z = start_z + size_z
+            end_m = start_m + size_m
+            linestring_str = f'LINESTRING ZM({start_x} {start_y} {start_z} {start_m}, {end_x} {end_y} {end_z} {end_m})'
             linestrings.append(linestring_str)
         return linestrings
 
