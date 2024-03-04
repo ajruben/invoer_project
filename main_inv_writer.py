@@ -188,7 +188,7 @@ class GeopackageToINV(Geopackage):
             np.savetxt(file, emissie_line, header="EMISSIE", fmt=['%d'] * 2 + ['%.2f'] * 8, delimiter=', ', comments='', newline='\n<0>, ')
         self._remove_trailing_0()
         self._remove_trailing_commas(temp_file)
-
+        self._retrieve_coordinates_sql_line(layer_name='wegdeelGPP')
         
 
     #----------------------------------------------------------------------------------------------------
@@ -217,7 +217,25 @@ class GeopackageToINV(Geopackage):
         return spectrum, index_mapping, contains_spectrum_column, spectrum_content
         #retrieve and format coord data
 
-   
+    def _retrieve_coordinates_sql_line(self, layer_name):
+        driver = ogr.GetDriverByName("GPKG")
+        geopackage_ds = driver.Open(self.geopackage_location, 1)  
+        sql_query = f"SELECT ST_AsText(geom) AS wkt FROM {layer_name}"
+        result = geopackage_ds.ExecuteSQL(sql_query)                                                        
+        result_gen = [res for res in result]                                                           #result is some ogr object that must be iterated over to obtain the result, kind of like fetchall()
+        results_gen = [str(res)[str(res).index("ZM(") + 3 :str(res).index(")\n\n")] for res in result_gen]
+    
+        line_coordinates_gen = [[tuple( map ( float, point.split())) for point in string.split(', ')] for string in results_gen]
+        line_coordinates_tup = tuple(tuple((line_index + 1, tuple(coord_tuple for coord_tuple in line_gen))) for line_index, line_gen in enumerate(line_coordinates_gen))
+        line_corners = tuple(len(line_data[1]) for line_data in line_coordinates_tup) #take into account that index is also counted, so actual number is one less.
+        most_corners = max(line_corners) 
+        corners_needed = tuple(most_corners - corners for corners in line_corners)
+    
+        from itertools import chain #to unpack tuple
+        line_padded_tup = [(line_data[0],) + tuple(chain(*line_data[1])) + (31415, -31415, 31415, -31415) * pad_factor for pad_factor, line_data in zip(corners_needed, line_coordinates_tup)]
+        #Convert to arrays for vectorized operations:
+        coord_data = np.array(np.array(line_padded_tup).tolist())
+        print(result_gen[-3:-1], "\n\n", results_gen[-3:-1],"\n\n", line_coordinates_gen[-3:-1], "\n\n",line_coordinates_tup[-3:-1], coord_data[-3:-1])
 
     def _retrieve_coordinates_sql_poly(self, reflectie, layer_name): #TODO:
         """
