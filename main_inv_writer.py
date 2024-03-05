@@ -267,6 +267,13 @@ class GeopackageToINV(Geopackage):
             processed_lists = [[value if value != 123456789.0 else '' for value in inner_list] for inner_list in processed_lists]
             # Split every list into two (keep the order, last 4 elements are split)
             processed_lists = [[sublst[:-4]] + [sublst[-4:]] for sublst in processed_lists]
+            processed_lists = [
+                                    [
+                                        [int(value) if isinstance(value, float) and value.is_integer() else value for value in sublst[0]],
+                                        ['{:.2f}'.format(value) for value in sublst[1]]
+                                    ]
+                                    for sublst in processed_lists
+                                ]
             processed_lists =  list(chain(*processed_lists))
             return processed_lists
         # Vectorize the function (optional, since it's not a NumPy array operation)
