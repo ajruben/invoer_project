@@ -23,6 +23,7 @@ class GeopackageToINV(Geopackage):
 
         self.inv_file_location = inv_file_location
         self.header = ["Rekenhart NL 1 invoerfile\n","SITUATIE:1\n","VARIANT:00\n","W,Ow2023\n","VERSIE\n\t16\n"] #TODO: GENERATE ONE ACCORDING TO WHAT FITS TO GPKG
+        self.closer = ["STUURVARIABELEN\n", "<0>,   1,   1, 100,  0,   0,   1,  0\n", "<1>,   0,   0,   0,   1,   0,   1,   0,   0,   0,   0,   0,   1,   0,   0\n", "END"]
     
     #----------------------------------------------------------------------------------------------------
     #methods for writing the invoer file
@@ -30,8 +31,15 @@ class GeopackageToINV(Geopackage):
         
         print('\nWriting to inv file...\n')
         start_time = time.time()
+        with open(self.inv_file_location, 'w') as file:
+                file.writelines(self.header)
+
         self.bebouwing() #cvgg: bouwwerk, rh:bebouwing
         self.wegvakken() #
+
+        with open(self.inv_file_location, 'a') as file:
+                file.writelines(self.closer)
+
         end_time = time.time()
         elapsed_time = end_time - start_time
         print(f"\nFinished writing, time taken: {elapsed_time} seconds.\n")
@@ -62,7 +70,7 @@ class GeopackageToINV(Geopackage):
                     values[-2] = values[-2][:-4] + ","
                 lines[i] = ' '.join(values) + '\n'
             # Open the file for writing and save the changes
-            with open(self.inv_file_location, 'w') as file2:
+            with open(self.inv_file_location, 'a') as file2:
                 file2.writelines(lines)
         os.remove(temp_file)
 
@@ -380,14 +388,14 @@ class GeopackageToINV(Geopackage):
     def _remove_trailing_commas(self, temp_file):
         with open(temp_file, 'r') as file:
             lines = file.readlines()
-        selected_indices = [(i * 6) - (6 - 1) for i in range(int(len(lines)/6))] 
+        selected_indices = [i for i in range(1, len(lines),6)] 
         for i in selected_indices:
             values1 = lines[i].strip().split(',')
             values2 = lines[i+4].strip().split(',')
             values3 = lines[i+5].strip().split(',')
             lines[i] = ','.join(values1[:-2]) + '\n'
-            lines[i+4] = ','.join(values2[:5]) + '\n'
-            lines[i+5] =  ','.join(values3[:5]) + '\n'
+            lines[i+4] = ','.join(values2[:4]) + '\n'
+            lines[i+5] =  ','.join(values3[:4]) + '\n'
         # Write the modified lines back to the file
         with open(self.inv_file_location, 'a') as file:
             file.writelines(lines)
@@ -396,7 +404,7 @@ class GeopackageToINV(Geopackage):
 
 
 if __name__ == '__main__':
-    ntf = 'inv\\invoer1.txt'
+    ntf = 'inv\\invoer1.inv'
     gpkg = "test.gpkg"
     gpkg = GeopackageToINV(geopackage = gpkg, inv_file_location=ntf)
     gpkg.connect()

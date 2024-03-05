@@ -1,0 +1,11 @@
+RIVM rekenhart 1.0.0    (build 0)
+5-3-2024
+Rekenhart NL 1 invoerfile
+SITUATIE:1
+VARIANT:00
+[WINHAVIK]
+[KOP]   WAARNEEMPUNTEN
+"volgnummer","nummer","WinHavik_ID","schermvariant","waarneemhoogte","waarneemhoogtenr","maaiveldhoogte","vrepcode","Laeq_eo_ep_p1","Laeq_io_ep_p1","Laeq_eo_ip_p1","Laeq_io_ip_p1","Laeq_eo_ep_p2","Laeq_io_ep_p2","Laeq_eo_ip_p2","Laeq_io_ip_p2","Laeq_eo_ep_p3","Laeq_io_ep_p3","Laeq_eo_ip_p3","Laeq_io_ip_p3",
+[WINHAVIK]
+[KOP]   FOUTMELDINGEN
+"type","foutmelding","bloknaam","WinHavik_ID"

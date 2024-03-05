@@ -6,6 +6,8 @@
 from osgeo import ogr
 import random
 import math
+from itertools import chain
+
 geometries_dict = {}
 #beschrijvingen bij parameters toevoegen TODO
 band = [random.randrange(11)/10 for i in range(1,11)]
@@ -13,8 +15,18 @@ band = [random.randrange(11)/10 for i in range(1,11)]
 def make_reflection_bandbreedte(rows):
     band = [random.choice([int(i*10) for i in range(7,9)]) for i in range(int(rows))] 
     return band
-rows = 10
-feature_count_wegvakken = 100000
+
+rows = 2
+feature_count_wegvakken = 2
+nr_waarneempuntenxy = 5
+
+#variabelen voor genereren waarneempunten
+IDpunt = [str(i) for i in range(1,nr_waarneempuntenxy + 1)]
+nr_waarneemhoogtes_per_punt = [random.randint(1,3) for i in range(nr_waarneempuntenxy)]
+idhoogtes = [[IDpunt[i]] * nr_waarneemhoogtes_per_punt[i]  for i in range(len(IDpunt))]
+idhoogtes = list(chain(*idhoogtes))
+z_waarden = [i*2  for nr in nr_waarneemhoogtes_per_punt for i in range(1,nr+1)]
+
 wegdektypes = ['referentiewegdek',
                '1L ZOAB',
                'akoestisch geoptimaliseerd 1L ZOAB',
@@ -41,7 +53,7 @@ table_schemas = {
         'srs_id':28992,
         'geometry_type': ogr.wkbPolygonZM,
         'columns':[
-                {'name': 'band31Hz', 'type': ogr.OFTReal},
+             
                 {'name': 'band63Hz', 'type': ogr.OFTReal},
                 {'name': 'band125Hz', 'type': ogr.OFTReal},
                 {'name': 'band250Hz', 'type': ogr.OFTReal},
@@ -53,7 +65,7 @@ table_schemas = {
         ],
         'feature_count': 10e6,
         'data': { 
-                'band31Hz': make_reflection_bandbreedte(rows),
+             
                 'band63Hz': make_reflection_bandbreedte(rows),
                 'band125Hz': make_reflection_bandbreedte(rows),
                 'band250Hz': make_reflection_bandbreedte(rows),
@@ -323,55 +335,56 @@ table_schemas = {
         'geometry_pattern' : 'random'
     },
     
-    'tblRekenpunt':
+    'Waarneempunt':
     {
-        'table_name':'tblRekenpunt',
+        'table_name':'Waarneempunt',
         'srs_id':28992,
-        'geometry_type': ogr.wkbPoint,
+        'geometry_type': ogr.wkbPointZM,
         'columns':[
-                {'name': 'ID', 'type': ogr.OFTInteger},
+                {'name': 'ID', 'type': ogr.OFTString},
+                {'name': 'X', 'type': ogr.OFTReal},
+                {'name': 'Y', 'type': ogr.OFTReal},
+                {'name': 'M', 'type': ogr.OFTReal},
+                {'name': 'maaiveldBerekenen', 'type' : ogr.OFTInteger},
+                {'name':'type', 'type': ogr.OFTString},
+                {'name':'reflectiesAantal', 'type': ogr.OFTString},
                 {'name': 'ID_Pand', 'type': ogr.OFTInteger},
-                {'name': 'kenmerk', 'type': ogr.OFTString},
-                {'name': 'adres', 'type': ogr.OFTString},
-                {'name': 'typeGevel', 'type': ogr.OFTInteger},
-                {'name': 'aantalReflecties', 'type': ogr.OFTInteger},
-                {'name': 'automatischMaaiveld', 'type': ogr.OFTInteger},
+                {'name': 'opermerking1', 'type': ogr.OFTString},
+                {'name': 'opermerking2', 'type': ogr.OFTString}
         ],
         'data' : {
-            'ID':[i for i in range(1,51)],
-            'ID_Pand':[i for i in range(1,51)],
-            'kenmerk':[""] * 50,
-            'adres':[""] * 50,
-            'typeGevel':[1] * 50,
-            'aantalReflecties':[1] * 50,
-            'automatischMaaiveld':[random.choice([0,1]) for i in range(1,51)]
+            'ID':IDpunt,
+            'X':[i*100 for i in range(1,nr_waarneempuntenxy + 1)],
+            'Y':[i*100 for i in range(1,nr_waarneempuntenxy + 1)],
+            'M':[0] * nr_waarneempuntenxy,
+            'type': ['V'] * nr_waarneempuntenxy,
+            'maaiveldBerekenen' : [0] * nr_waarneempuntenxy,
+            'reflectiesAantal': ['S'] * nr_waarneempuntenxy,
+            'ID_Pand':[""] * nr_waarneempuntenxy,
+            'opermerking1':[""] * nr_waarneempuntenxy,
+            'opermerking2':[""] * nr_waarneempuntenxy
         },
         'min_x':-1000,
         'max_x':1000,
         'min_y':-1000,
         'max_y':1000,
-        'geometry_pattern' : 'random'  
+        'geometry_pattern' : 'none'  
     },
-    'tblRekenpunt_waarneemhoogte':
+    'WaarneempuntHoogte':
     {
-        'table_name':'tblRekenpunt',
+        'table_name':'WaarneempuntHoogte',
         'srs_id':28992,
         'geometry_type': ogr.wkbNone,
         'columns':[
-                {'name': 'ID', 'type': ogr.OFTInteger},
+                {'name': 'ID', 'type': ogr.OFTString},
                 {'name': 'Z', 'type': ogr.OFTReal},
-                {'name': 'H', 'type': ogr.OFTReal}
+                {'name': 'Lcorrectie', 'type': ogr.OFTReal}
         ],
         'data' : {
-            'ID':[i for i in range(1,51)],
-            'Z':[random.choice([1,2,3,4,5]) for i in range(1,51)],
-            'H':[4] * 50
+            'ID':idhoogtes,
+            'Z':z_waarden,
+            'Lcorrectie':[0] * len(z_waarden)
         },
-        'min_x':-1000,
-        'max_x':1000,
-        'min_y':-1000,
-        'max_y':1000,
-        'geometry_pattern' : 'None'  
     },
 }
 
@@ -598,7 +611,7 @@ class Geopackage(): #TODO, replace print statements. is fine for now
             self.__Create_Polygon(geopackage,layer_name, spatial_reference, table_schema) #double geom, check later #TODOs
         elif geometry == ogr.wkbLineString or geometry == ogr.wkbLineStringZM or geometry == 3002:
             self.__Create_Line(geopackage,layer_name, spatial_reference, table_schema)
-        elif geometry == ogr.wkbPoint:
+        elif geometry == ogr.wkbPointZM:
             self.__Create_Point(geopackage,layer_name, spatial_reference, table_schema)
         elif geometry == ogr.wkbNone:
             self.__Create_Attribute(geopackage,layer_name, spatial_reference, table_schema)
@@ -644,6 +657,8 @@ class Geopackage(): #TODO, replace print statements. is fine for now
     def __Create_Features_from_data_Point(self, layer, table_schema):
         if table_schema['geometry_pattern'] == 'random':
             WKT = self.__Create_PointWKT_random(table_schema)
+        if table_schema['geometry_pattern'] == 'none':
+            WKT = self.__Create_PointWKT(table_schema)
         data = table_schema['data']
         self.__create_features(layer, data, WKT)
 
@@ -683,6 +698,17 @@ class Geopackage(): #TODO, replace print statements. is fine for now
                 print(f"feature {i} added")
 
     #4. Creating WKT lists, thus containing geometry information in WKT format. This part actually makes the geo part of the feature table. (feature.SetGeometry(ogr.CreateGeometryFromWkt(polygonsWKT[i])))
+    def __Create_PointWKT(self, table_schema):
+        data = table_schema['data']
+        points = []
+        for i in range(len(data['X'])):
+            x = data['X'][i]
+            y = data['Y'][i]
+            m = data['M'][i]
+            point_wkt = f"POINT ({x} {y} 0.00 {m})"
+            points.append(point_wkt)
+        return points
+    
     def __Create_PointWKT_random(self, table_schema):
         import random
         points = []
@@ -779,7 +805,7 @@ class Geopackage(): #TODO, replace print statements. is fine for now
             center_x = random.uniform(min_x, max_x)
             center_y = random.uniform(min_y, max_y)
     
-            corners_num = random.randint(3,15)
+            corners_num = random.randint(3,8)
             max_side = max(max_x - min_x, max_y - min_y) #for r condition, take longest side. 
             # get r
             def random_r(minr = (1/50 * max_side) * (num)**(-1/2), maxr = (1/10 * max_side) * (num)**(-1/2)):
@@ -980,10 +1006,11 @@ if __name__ == '__main__':
     gpkg = Geopackage(geopackage="test.gpkg", create=True) 
    
     gpkg.connect()
-    gpkg.add_feature_table('bouwwerk', table_schema= table_schemas['bouwwerk'])
-    gpkg.add_feature_table('wegdeelGPP', table_schema= table_schemas['wegdeelGPP'])
-    #gpkg.add_feature_table('hoogtelijn', table_schema= table_schemas['hoogtelijn'])
-    #gpkg.add_feature_table('wegdeelGPP', table_schema= table_schemas['wegdeelGPP'])
+    gpkg.add_feature_table('bouwwerk', table_schema = table_schemas['bouwwerk'])
+    gpkg.add_feature_table('wegdeelGPP', table_schema = table_schemas['wegdeelGPP'])
+    gpkg.add_feature_table('Waarneempunt', table_schema = table_schemas['Waarneempunt'])
+    gpkg.add_feature_table('WaarneempuntHoogte', table_schema = table_schemas['WaarneempuntHoogte'])
+
     #gpkg.add_feature_table('geluidschermdeel', table_schema= table_schemas['geluidschermdeel'])
     #gpkg.add_feature_table('tblRekenpunt', table_schema= table_schemas['tblRekenpunt'])
     #gpkg.add_feature_table('tblRekenpunt_waarneemhoogte', table_schema= table_schemas['tblRekenpunt_waarneemhoogte'])
