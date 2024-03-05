@@ -5,6 +5,8 @@ import numpy as np
 import pandas as pd
 import os
 import csv
+from itertools import chain
+from functools import reduce
 #TODO Reseach way to achievt he same with only sql if frank or philip considers it relevant
 #https://www.askpython.com/python/examples/fastest-write-huge-data
 emmissie_kolommen = ['emmissieDag64Hz', 'emmissieDag125Hz', 'emmissieDag250Hz', 'emmissieDag500Hz', 'emmissieDag1000Hz', 'emmissieDag2000Hz', 'emmissieDag4000Hz', 'emmissieDag8000Hz', 'emmissieAvond64Hz', 'emmissieAvond125Hz', 'emmissieAvond250Hz', 'emmissieAvond500Hz', 'emmissieAvond1000Hz', 'emmissieAvond2000Hz', 'emmissieAvond4000Hz', 'emmissieAvond8000Hz', 'emmissieNacht64Hz', 'emmissieNacht125Hz', 'emmissieNacht250Hz', 'emmissieNacht500Hz', 'emmissieNacht1000Hz', 'emmissieNacht2000Hz', 'emmissieNacht4000Hz', 'emmissieNacht8000Hz']
@@ -36,7 +38,7 @@ class GeopackageToINV(Geopackage):
 
         self.bebouwing() #cvgg: bouwwerk, rh:bebouwing
         self.wegvakken() #
-
+        self.waarneempunten()
         with open(self.inv_file_location, 'a') as file:
                 file.writelines(self.closer)
 
@@ -206,7 +208,77 @@ class GeopackageToINV(Geopackage):
         self._remove_trailing_0()
         self._remove_trailing_commas(temp_file)
         
+    def waarneempunten(self):
+        sql_qry = """
+        SELECT
+            WAARNEEMPUNT.fid,
+            WAARNEEMPUNT.type,
+            GROUP_CONCAT(WaarneempuntHoogte.Z) AS Z,
+            WAARNEEMPUNT.reflectiesAantal,
+            WAARNEEMPUNT.maaiveldBerekenen
+        FROM 
+            Waarneempunt
+        LEFT JOIN
+            WaarneempuntHoogte ON Waarneempunt.ID = WaarneempuntHoogte.ID
+        GROUP BY
+            WAARNEEMPUNT.ID
+        """
+        self.cur.execute(sql_qry)
+        results = np.array(self.cur.fetchall())
+        hoogtes = results[:,2]
+        def parse_and_fill(s): #TODO APPLY THIS AT OTHER PLACES
+            values = np.fromiter(map(float, s.split(',')), dtype=float)
+            result = np.zeros(10)
+            result[:len(values)] = values
+            result = np.round(result, decimals=2)
+            return result
+        vectorized_parse_and_fill = np.vectorize(parse_and_fill, otypes=[np.ndarray])
+        output_array = np.vstack(vectorized_parse_and_fill(hoogtes))
+        print(output_array)
+        #results[:,2] = output_array
+        print(results)
+        new_matrix = np.hstack((results[:,[0,1]], output_array, results[:,3:]))
+        print(new_matrix)
+
+        driver = ogr.GetDriverByName("GPKG")
+        geopackage_ds = driver.Open(self.geopackage_location, 1)  
+        sql_query = f"SELECT ST_AsText(geom) AS wkt FROM WAARNEEMPUNT"
+        result = geopackage_ds.ExecuteSQL(sql_query)                                                        
+        result_gen = [res for res in result]                                                           
+        results_gen = [str(res)[str(res).index("ZM(") + 3 :str(res).index(")\n")] for res in result_gen]
+        coordinates_array = np.array([[tuple( map ( float, point.split())) for point in string.split(', ')][0] for string in results_gen])
         
+        
+        result_matrix = np.concatenate((new_matrix, coordinates_array), axis=1)
+        #print(results, coordinates_array, result_matrix)
+        result_matrix = np.where(result_matrix == 'V', '1', result_matrix)
+        result_matrix = np.where(result_matrix == 'S', 123456789, result_matrix)
+        result_matrix = np.where(result_matrix == str(1), 1, result_matrix)
+        result_matrix = np.where(result_matrix == str(0), 0, result_matrix)
+        dummy_column = np.full((result_matrix.shape[0], 1), 123456789)
+        result_matrix = np.insert(result_matrix, [1, 2], dummy_column, axis=1)
+        result_matrix = result_matrix.astype(float)
+        result_matrix = result_matrix.tolist()
+        print(result_matrix)
+        def process_lists(lst):
+            # Insert "<0>" as the first element for every list
+            lst = reduce(lambda a, b : a + [''] if b == 123456789 else a + [b], lst , [])
+            processed_lists = [['<0>'] + sublst for sublst in lst]
+            processed_lists = [[value if value != 123456789.0 else '' for value in inner_list] for inner_list in processed_lists]
+            # Split every list into two (keep the order, last 4 elements are split)
+            processed_lists = [[sublst[:-4]] + [sublst[-4:]] for sublst in processed_lists]
+            processed_lists =  list(chain(*processed_lists))
+            return processed_lists
+        # Vectorize the function (optional, since it's not a NumPy array operation)
+        vectorized_process_lists = np.vectorize(process_lists, otypes=[type([])])
+        processed_lists = process_lists(result_matrix)
+        print(processed_lists)
+        regels = [['WAARNEEMPUNTEN']] + processed_lists
+        #print(regels) 
+
+        with open(self.inv_file_location, 'a') as file:
+            csv_writer = csv.writer(file, lineterminator='\n', delimiter=',')
+            csv_writer.writerows(regels)
 
     #----------------------------------------------------------------------------------------------------
     #help methods
